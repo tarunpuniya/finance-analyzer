@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Transactions — AI Finance Pro</title>
+  <meta name="description" content="View, search, and manage all your financial transactions.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <link rel="stylesheet" href="app.css">
+  <style>
+    .tx-filters {
+      display: flex; gap: 10px; flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .filter-select {
+      height: 36px; padding: 0 14px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-pill);
+      background: var(--surface); color: var(--text);
+      font-size: 12px; font-weight: 500; font-family: inherit;
+      cursor: pointer; outline: none; transition: border-color .18s;
+    }
+
+    .filter-select:focus { border-color: var(--primary); }
+
+    .search-bar {
+      display: flex; align-items: center; gap: 8px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-pill); padding: 0 14px;
+      height: 36px; flex: 1; min-width: 140px; max-width: 300px;
+      transition: border-color .18s;
+    }
+
+    .search-bar:focus-within { border-color: var(--primary); }
+    .search-bar i { font-size: 12px; color: var(--muted-2); }
+    .search-bar input { border: none; background: none; outline: none; flex: 1; font-size: 13px; font-family: inherit; color: var(--text); }
+
+    .tx-stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+    }
+
+    @media (max-width: 640px) {
+      .tx-stats { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+      .tx-stat { padding: 14px; }
+      .tx-stat-value { font-size: 14px !important; letter-spacing: -.02em !important; }
+    }
+
+    .tx-stat {
+      background: #ffffff;
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      border-radius: 12px;
+      padding: 20px;
+      transition: all 0.2s ease;
+      cursor: default;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .tx-stat::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 4px;
+      height: 100%;
+      background: transparent;
+      transition: background 0.2s ease;
+    }
+
+    .tx-stat:hover {
+      border-color: rgba(0, 0, 0, 0.12);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+    }
+
+    .tx-stat.clickable {
+      cursor: pointer;
+    }
+
+    .tx-stat.clickable:hover::before {
+      background: var(--primary);
+    }
+
+    .tx-stat-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      margin-bottom: 12px;
+    }
+
+    .tx-stat-label { 
+      font-size: 12px; 
+      color: rgba(0, 0, 0, 0.5);
+      font-weight: 500; 
+      margin-bottom: 8px;
+      letter-spacing: -0.1px;
+    }
+    
+    .tx-stat-value { 
+      font-size: 36px; 
+      font-weight: 600; 
+      letter-spacing: -1px;
+      color: #000000;
+      line-height: 1.0;
+    }
+
+    .tx-stat-hint {
+      font-size: 11px;
+      color: rgba(0, 0, 0, 0.35);
+      margin-top: 8px;
+      letter-spacing: -0.05px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .tx-entity {
+      display: flex; align-items: center; gap: 10px;
+    }
+
+    .tx-entity-icon {
+      width: 32px; height: 32px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; flex-shrink: 0;
+    }
+
+    .tx-entity-name { font-size: 13px; font-weight: 600; color: var(--text); }
+    .tx-entity-cat  { font-size: 11px; color: var(--muted); }
+
+    .pagination {
+      display: flex; align-items: center; gap: 6px;
+      justify-content: center; padding-top: 16px;
+    }
+
+    .page-btn {
+      width: 32px; height: 32px; border-radius: var(--radius-sm);
+      border: 1px solid var(--border); background: var(--surface);
+      font-size: 12px; font-weight: 600; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: all .18s; font-family: inherit; color: var(--text);
+    }
+
+    .page-btn:hover, .page-btn.active {
+      background: var(--primary); color: #fff; border-color: var(--primary);
+    }
+
+    .page-btn:disabled { opacity:.4; cursor:default; }
+
+    @media(max-width:800px) { .tx-stats { grid-template-columns:1fr 1fr; } }
+    @media(max-width:500px) { .tx-stats { grid-template-columns:1fr; } }
+    
+    /* Mobile card view for transactions table */
+    @media (max-width: 640px) {
+      .data-table thead { display: none; }
+      .data-table, .data-table tbody, .data-table tr { display: block; width: 100%; }
+      .data-table tr {
+        margin-bottom: 12px;
+        padding: 12px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+      }
+      .data-table td {
+        display: flex;
+        justify-content: space-between;
+        padding: 6px 0;
+        border-bottom: none;
+      }
+      .data-table td:before {
+        content: attr(data-label);
+        font-weight: 600;
+        font-size: 11px;
+        color: var(--muted);
+        text-transform: uppercase;
+      }
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <nav class="sidebar">
+    <div class="sidebar-brand">
+      <div class="brand-icon">💰</div>
+      <div class="brand-text"><b>FinanceAI</b><small>Smart Money Manager</small></div>
+    </div>
+    <div class="nav-section">
+      <div class="nav-section-label">Main</div>
+      <a href="dashboard.html"       class="nav-item" data-page="dashboard"><i class="fas fa-th-large"></i><span>Dashboard</span></a>
+      <a href="transaction.html" class="nav-item active" data-page="transactions"><i class="fas fa-exchange-alt"></i><span>Transactions</span></a>
+      <a href="wallet.html"      class="nav-item" data-page="wallet"><i class="fas fa-wallet"></i><span>Wallet</span></a>
+      <a href="goals.html"       class="nav-item" data-page="goals"><i class="fas fa-bullseye"></i><span>Goals</span></a>
+      <a href="budget.html"      class="nav-item" data-page="budget"><i class="fas fa-chart-bar"></i><span>Budget</span></a>
+      <a href="analytics.html"   class="nav-item" data-page="analytics"><i class="fas fa-chart-line"></i><span>Analytics</span></a>
+      <a href="settings.html"    class="nav-item" data-page="settings"><i class="fas fa-cog"></i><span>Settings</span></a>
+    </div>
+    <div class="sidebar-spacer"></div>
+    <div class="sidebar-footer">
+      <a href="#" class="nav-item"><i class="fas fa-question-circle"></i><span>Help</span></a>
+      <button class="nav-item" onclick="logout()"><i class="fas fa-sign-out-alt"></i><span>Log out</span></button>
+    </div>
+  </nav>
+
+  <div class="main">
+    <header class="topbar">
+      <button class="hamburger-btn" onclick="toggleMobileSidebar()" aria-label="Toggle menu">
+        <i class="fas fa-bars"></i>
+      </button>
+      <div class="topbar-greeting">
+        <h1 id="topbarGreeting">Transactions</h1>
+        <p id="topbarSub"></p>
+      </div>
+      <div class="topbar-right">
+        <button class="btn btn-primary" onclick="openAddModal()">
+          <i class="fas fa-plus"></i> Add Transaction
+        </button>
+        <div class="user-chip">
+          <div class="user-avatar" id="userAvatar">U</div>
+          <div class="user-info">
+            <span id="userNameChip">User</span>
+            <small id="userEmailChip"></small>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <div class="content">
+      <div>
+        <div class="page-heading">All Transactions</div>
+        <div class="page-subtitle">Complete history of your income and expenses.</div>
+      </div>
+
+      <!-- Stats -->
+      <div class="tx-stats">
+        <!-- Total Transactions -->
+        <div class="tx-stat">
+          <div class="tx-stat-icon" style="background: rgba(124, 58, 237, 0.1); color: #7c3aed;">
+            <i class="fas fa-receipt"></i>
+          </div>
+          <div class="tx-stat-label">Total Transactions</div>
+          <div class="tx-stat-value" id="statCount">0</div>
+        </div>
+
+        <!-- This Week -->
+        <div class="tx-stat clickable" onclick="filterByWeek()">
+          <div class="tx-stat-icon" style="background: rgba(6, 182, 212, 0.1); color: #06b6d4;">
+            <i class="fas fa-calendar-week"></i>
+          </div>
+          <div class="tx-stat-label">This Week</div>
+          <div class="tx-stat-value" id="statWeek">0</div>
+          <div class="tx-stat-hint">
+            <i class="fas fa-filter" style="font-size: 9px;"></i>
+            <span>Click to filter</span>
+          </div>
+        </div>
+
+        <!-- This Month -->
+        <div class="tx-stat clickable" onclick="filterByMonth()">
+          <div class="tx-stat-icon" style="background: rgba(245, 158, 11, 0.1); color: #f59e0b;">
+            <i class="fas fa-calendar-alt"></i>
+          </div>
+          <div class="tx-stat-label">This Month</div>
+          <div class="tx-stat-value" id="statMonth">0</div>
+          <div class="tx-stat-hint">
+            <i class="fas fa-filter" style="font-size: 9px;"></i>
+            <span>Click to filter</span>
+          </div>
+        </div>
+
+        <!-- Export Data -->
+        <div class="tx-stat clickable" onclick="exportToExcel()">
+          <div class="tx-stat-icon" style="background: rgba(16, 185, 129, 0.1); color: #10b981;">
+            <i class="fas fa-download"></i>
+          </div>
+          <div class="tx-stat-label">Export Data</div>
+          <div class="tx-stat-value" style="font-size: 18px; letter-spacing: -0.3px; font-weight: 600;">Download CSV</div>
+          <div class="tx-stat-hint">
+            <i class="fas fa-file-csv" style="font-size: 9px;"></i>
+            <span>Excel compatible</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Transaction table card -->
+      <div class="card">
+        <div class="card-header">
+          <div class="tx-filters">
+            <div class="search-bar">
+              <i class="fas fa-search"></i>
+              <input type="text" id="searchInput" placeholder="Search transactions…" oninput="applyFilters()">
+            </div>
+            <select class="filter-select" id="typeFilter" onchange="updateFilterCategories(); applyFilters();">
+              <option value="all">All types</option>
+              <option value="income">Income</option>
+              <option value="expense">Expense</option>
+            </select>
+            <select class="filter-select" id="catFilter" onchange="applyFilters()">
+              <option value="all">All categories</option>
+              <!-- Categories will be populated dynamically -->
+            </select>
+          </div>
+          <div style="font-size:12px;color:var(--muted);white-space:nowrap;">
+            <span id="txCount">0</span> transactions
+          </div>
+        </div>
+        <div style="overflow-x:auto;">
+          <table class="data-table" id="txTable">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Amount</th>
+                <th>Description</th>
+                <th>Category</th>
+                <th>Type</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="txBody">
+              <tr><td colspan="6">
+                <div class="empty-state"><div class="empty-state-icon">💳</div><p>Loading…</p></div>
+              </td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="card-body" style="padding-top:0;">
+          <div class="pagination" id="pagination"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Mobile Bottom Navigation ──────────────────────────────── -->
+<nav class="mobile-bottom-nav" aria-label="Mobile navigation">
+  <a href="dashboard.html" class="mobile-nav-item">
+    <i class="fas fa-th-large"></i><span>Home</span>
+  </a>
+  <a href="transaction.html" class="mobile-nav-item active">
+    <i class="fas fa-exchange-alt"></i><span>Txns</span>
+  </a>
+  <a href="wallet.html" class="mobile-nav-item">
+    <i class="fas fa-wallet"></i><span>Wallet</span>
+  </a>
+  <a href="budget.html" class="mobile-nav-item">
+    <i class="fas fa-chart-bar"></i><span>Budget</span>
+  </a>
+  <a href="analytics.html" class="mobile-nav-item">
+    <i class="fas fa-chart-line"></i><span>Analytics</span>
+  </a>
+</nav>
+
+<!-- Add Transaction Modal -->
+<div class="modal-overlay" id="addModal" style="display:none;" onclick="closeAddModal(event)">
+  <div class="modal" role="dialog">
+    <div class="modal-header">
+      <h2 class="modal-title">Add Transaction</h2>
+      <button class="modal-close" onclick="closeAddModal()"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label" for="txTitle">Description</label>
+        <div class="form-input-icon">
+          <i class="fas fa-pen"></i>
+          <input type="text" class="form-input" id="txTitle" placeholder="e.g. Salary, Groceries, Rent">
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="form-group">
+          <label class="form-label" for="txAmount">Amount</label>
+          <div class="form-input-icon">
+            <i class="fas fa-rupee-sign"></i>
+            <input type="number" class="form-input" id="txAmount" placeholder="0.00">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="txType">Type</label>
+          <select class="form-input" id="txType" onchange="updateCategoryOptions()">
+            <option value="income">Income</option>
+            <option value="expense" selected>Expense</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="txCategory">Category</label>
+        <select class="form-input" id="txCategory">
+          <!-- Categories will be populated dynamically based on type -->
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeAddModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="addTransaction()" id="btn-add">
+        <i class="fas fa-plus"></i> Add
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-container"></div>
+<script src="app.js"></script>
+<script>
+  const INCOME_CATEGORIES = [
+    'Salary', 'Freelance', 'Business', 'Dividend', 'Gift', 'Cashback', 'Rental', 'Other'
+  ];
+  
+  const EXPENSE_CATEGORIES = [
+    'Groceries', 'Food', 'Shopping', 'Rent', 'Travel', 'Medical', 
+    'Entertainment', 'Investment', 'Utilities', 'Education', 'Other'
+  ];
+
+  const CATEGORY_COLORS = {
+    Salary:'#7c3aed',Groceries:'#06b6d4',Food:'#f59e0b',
+    Shopping:'#ec4899',Rent:'#6366f1',Travel:'#10b981',
+    Medical:'#ef4444',Entertainment:'#8b5cf6',Investment:'#14b8a6',
+    Freelance:'#8b5cf6',Business:'#14b8a6',Dividend:'#10b981',
+    Gift:'#ec4899',Cashback:'#06b6d4',Rental:'#6366f1',
+    Utilities:'#f59e0b',Education:'#7c3aed',Other:'#a78bfa'
+  };
+  const CATEGORY_ICONS = {
+    Salary:'fa-sack-dollar',Groceries:'fa-basket-shopping',
+    Food:'fa-utensils',Shopping:'fa-bag-shopping',
+    Rent:'fa-house',Travel:'fa-plane-departure',
+    Medical:'fa-heart-pulse',Entertainment:'fa-film',
+    Investment:'fa-chart-line',Freelance:'fa-laptop-code',
+    Business:'fa-briefcase',Dividend:'fa-chart-pie',
+    Gift:'fa-gift',Cashback:'fa-hand-holding-dollar',
+    Rental:'fa-building',Utilities:'fa-bolt',
+    Education:'fa-graduation-cap',Other:'fa-credit-card'
+  };
+
+  let email = '';
+  let allTx = [];
+  let filtered = [];
+  const PAGE_SIZE = 15;
+  let currentPage = 1;
+
+  window.addEventListener('DOMContentLoaded', async () => {
+    email = APP.initTopbar();
+    if (!email) return;
+    document.body.classList.add('ready');
+    updateCategoryOptions(); // Initialize modal category options
+    updateFilterCategories(); // Initialize filter category options
+    await loadTransactions();
+  });
+
+  function updateCategoryOptions() {
+    const type = document.getElementById('txType').value;
+    const categorySelect = document.getElementById('txCategory');
+    const categories = type === 'income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
+    
+    categorySelect.innerHTML = categories.map(cat => 
+      `<option value="${cat}">${cat}</option>`
+    ).join('');
+  }
+
+  function updateFilterCategories() {
+    const type = document.getElementById('typeFilter').value;
+    const catFilter = document.getElementById('catFilter');
+    const currentValue = catFilter.value;
+    
+    let categories = [];
+    if (type === 'all') {
+      // Show all categories when "All types" is selected
+      categories = [...INCOME_CATEGORIES, ...EXPENSE_CATEGORIES].filter((v, i, a) => a.indexOf(v) === i); // Remove duplicates
+    } else if (type === 'income') {
+      categories = INCOME_CATEGORIES;
+    } else {
+      categories = EXPENSE_CATEGORIES;
+    }
+    
+    catFilter.innerHTML = '<option value="all">All categories</option>' + 
+      categories.map(cat => `<option value="${cat}">${cat}</option>`).join('');
+    
+    // Restore previous selection if it exists in new list
+    if (currentValue !== 'all' && categories.includes(currentValue)) {
+      catFilter.value = currentValue;
+    }
+  }
+
+  async function loadTransactions() {
+    console.log('🔄 Loading transactions...');
+    const startTime = performance.now();
+    
+    try {
+      allTx = await APP.apiGet('/transactions', email);
+      filtered = [...allTx];
+      
+      const loadTime = performance.now() - startTime;
+      console.log(`✅ Loaded ${allTx.length} transactions in ${loadTime.toFixed(2)}ms`);
+      
+      updateStats();
+      renderTable();
+    } catch(e) { 
+      console.error('❌ Load error:', e);
+    }
+  }
+
+  function updateStats() {
+    // Total transactions
+    document.getElementById('statCount').textContent = allTx.length;
+    
+    // This week transactions
+    const now = new Date();
+    const weekStart = new Date(now);
+    weekStart.setDate(now.getDate() - now.getDay()); // Start of week (Sunday)
+    weekStart.setHours(0, 0, 0, 0);
+    
+    const weekTx = allTx.filter(t => new Date(t.date) >= weekStart);
+    document.getElementById('statWeek').textContent = weekTx.length;
+    
+    // This month transactions
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const monthTx = allTx.filter(t => new Date(t.date) >= monthStart);
+    document.getElementById('statMonth').textContent = monthTx.length;
+  }
+
+  function filterByWeek() {
+    const now = new Date();
+    const weekStart = new Date(now);
+    weekStart.setDate(now.getDate() - now.getDay());
+    weekStart.setHours(0, 0, 0, 0);
+    
+    filtered = allTx.filter(t => new Date(t.date) >= weekStart);
+    currentPage = 1;
+    renderTable();
+    APP.toast('Showing this week\'s transactions', 'info');
+  }
+
+  function filterByMonth() {
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    
+    filtered = allTx.filter(t => new Date(t.date) >= monthStart);
+    currentPage = 1;
+    renderTable();
+    APP.toast('Showing this month\'s transactions', 'info');
+  }
+
+  function exportToExcel() {
+    if (allTx.length === 0) {
+      APP.toast('No transactions to export!', 'error');
+      return;
+    }
+    
+    // Prepare data for export
+    const exportData = allTx.map(t => ({
+      Date: APP.formatDateWithSettings(t.date),
+      Description: t.title || t.description || 'N/A',
+      Category: t.category,
+      Type: t.type.toUpperCase(),
+      Amount: t.amount
+    }));
+    
+    // Create CSV content
+    const headers = Object.keys(exportData[0]).join(',');
+    const rows = exportData.map(row => Object.values(row).join(',')).join('\n');
+    const csv = headers + '\n' + rows;
+    
+    // Download CSV file
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Transactions_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+    
+    APP.toast('Transactions exported successfully!', 'success');
+  }
+
+  function applyFilters() {
+    const q    = document.getElementById('searchInput').value.toLowerCase();
+    const type = document.getElementById('typeFilter').value;
+    const cat  = document.getElementById('catFilter').value;
+    filtered = allTx.filter(t =>
+      (type === 'all' || t.type === type) &&
+      (cat  === 'all' || t.category === cat) &&
+      (!q || (t.title||t.description||'').toLowerCase().includes(q) || t.category.toLowerCase().includes(q))
+    );
+    currentPage = 1;
+    renderTable();
+  }
+
+  function renderTable() {
+    const tbody = document.getElementById('txBody');
+    document.getElementById('txCount').textContent = filtered.length;
+
+    const start = (currentPage - 1) * PAGE_SIZE;
+    const page  = filtered.slice(start, start + PAGE_SIZE);
+
+    if (!page.length) {
+      tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state">
+        <div class="empty-state-icon">🔍</div>
+        <p>No transactions found.</p>
+      </div></td></tr>`;
+      document.getElementById('pagination').innerHTML = '';
+      return;
+    }
+
+    tbody.innerHTML = page.map(t => {
+      const type  = (t.type||'expense').toLowerCase();
+      const sign  = type==='income' ? '+' : '-';
+      const color = type==='income' ? 'var(--income)' : 'var(--expense)';
+      const cColor= CATEGORY_COLORS[t.category] || '#a78bfa';
+      const icon  = CATEGORY_ICONS[t.category]  || 'fa-credit-card';
+      
+      // Use settings-aware formatting
+      const date = APP.formatDateWithSettings(t.date);
+      const amount = APP.formatCurrencyWithSettings(t.amount);
+
+      return `<tr>
+        <td style="color:var(--muted);font-size:12px;white-space:nowrap;">${date}</td>
+        <td style="font-weight:700;color:${color};white-space:nowrap;">${sign}${amount}</td>
+        <td>
+          <div class="tx-entity">
+            <div class="tx-entity-icon" style="background:${cColor}22;">
+              <i class="fas ${icon}" style="color:${cColor};"></i>
+            </div>
+            <div>
+              <div class="tx-entity-name">${t.title||t.description||'Transaction'}</div>
+              <div class="tx-entity-cat">${t.category}</div>
+            </div>
+          </div>
+        </td>
+        <td><span class="badge badge-purple">${t.category}</span></td>
+        <td>
+          <span class="badge ${type==='income' ? 'badge-green' : 'badge-red'}">
+            ${type.charAt(0).toUpperCase()+type.slice(1)}
+          </span>
+        </td>
+        <td>
+          <button class="btn btn-icon btn-ghost btn-sm" onclick="deleteTx('${t._id}')" title="Delete">
+            <i class="fas fa-trash-alt"></i>
+          </button>
+        </td>
+      </tr>`;
+    }).join('');
+
+    renderPagination();
+  }
+
+  function renderPagination() {
+    const total = Math.ceil(filtered.length / PAGE_SIZE);
+    if (total <= 1) { document.getElementById('pagination').innerHTML = ''; return; }
+
+    let html = `<button class="page-btn" onclick="goPage(${currentPage-1})" ${currentPage===1?'disabled':''}>‹</button>`;
+    for (let i = 1; i <= total; i++) {
+      if (i===1 || i===total || Math.abs(i-currentPage)<=1) {
+        html += `<button class="page-btn ${i===currentPage?'active':''}" onclick="goPage(${i})">${i}</button>`;
+      } else if (i===currentPage-2 || i===currentPage+2) {
+        html += '<span style="color:var(--muted);padding:0 4px;">…</span>';
+      }
+    }
+    html += `<button class="page-btn" onclick="goPage(${currentPage+1})" ${currentPage===total?'disabled':''}>›</button>`;
+    document.getElementById('pagination').innerHTML = html;
+  }
+
+  function goPage(p) {
+    const total = Math.ceil(filtered.length / PAGE_SIZE);
+    if (p < 1 || p > total) return;
+    currentPage = p;
+    renderTable();
+    document.getElementById('txTable').scrollIntoView({ behavior:'smooth', block:'start' });
+  }
+
+  function openAddModal() {
+    document.getElementById('addModal').style.display = 'flex';
+    updateCategoryOptions(); // Update categories when modal opens
+    document.getElementById('txTitle').focus();
+  }
+
+  function closeAddModal(e) {
+    if (!e || e.target === document.getElementById('addModal'))
+      document.getElementById('addModal').style.display = 'none';
+  }
+
+  async function addTransaction() {
+    const title    = document.getElementById('txTitle').value.trim();
+    const amount   = document.getElementById('txAmount').value;
+    const type     = document.getElementById('txType').value;
+    const category = document.getElementById('txCategory').value;
+    if (!title || !amount) return APP.toast('Fill all fields!', 'error');
+
+    try {
+      document.getElementById('btn-add').disabled = true;
+      await APP.apiPost('/add-transaction', { title, description:title, amount:Number(amount), category, type, email });
+      APP.toast('Transaction added!', 'success');
+      document.getElementById('txTitle').value  = '';
+      document.getElementById('txAmount').value = '';
+      closeAddModal();
+      await loadTransactions();
+    } catch(e) { APP.toast('Failed!', 'error'); }
+    finally { document.getElementById('btn-add').disabled = false; }
+  }
+
+  async function deleteTx(id) {
+    if (!confirm('Delete this transaction?')) return;
+    try {
+      await APP.apiDelete(`/transactions/${id}`);
+      APP.toast('Deleted', 'info');
+      await loadTransactions();
+    } catch(e) { APP.toast('Failed!', 'error'); }
+  }
+</script>
+</body>
+</html>
