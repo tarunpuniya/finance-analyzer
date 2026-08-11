@@ -18,8 +18,6 @@ df['income_bracket'] = pd.cut(df['monthly_income'],
 
 df['is_festival_month'] = df['month'].isin([10, 11, 12]).astype(int)
 df['is_tax_saving_month'] = df['month'].isin([1, 2, 3]).astype(int)
-df['limit_ratio'] = df['safe_spending_limit'] / df['monthly_income']
-
 # One-hot encode category
 df = pd.get_dummies(df, columns=['category'], prefix='category')
 
@@ -34,7 +32,7 @@ y = df['safe_spending_limit']  # TARGET: safe limit
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 print(f"\n[*] Training on {len(X_train)} samples")
 
-# Gradient Boosting
+
 print("\n[*] Training Gradient Boosting...")
 gb = GradientBoostingRegressor(n_estimators=200, learning_rate=0.1, max_depth=6, random_state=42)
 gb.fit(X_train, y_train)
@@ -43,7 +41,7 @@ gb_mae = mean_absolute_error(y_test, gb_pred)
 gb_r2 = r2_score(y_test, gb_pred)
 print(f"   MAE: Rs.{gb_mae:.2f} | R2: {gb_r2:.4f}")
 
-# Random Forest
+
 print("\n[*] Training Random Forest...")
 rf = RandomForestRegressor(n_estimators=200, max_depth=15, random_state=42, n_jobs=-1)
 rf.fit(X_train, y_train)

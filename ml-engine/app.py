@@ -1,166 +1,142 @@
-import sys, io
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
-sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
-from flask import Flask, request, jsonify
-from flask_cors import CORS
+import os
 import pickle
-import pandas as pd
 import numpy as np
+import pandas as pd
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, Field, validator
 
-app = Flask(__name__)
-CORS(app)
+# ── Paths ────────────────────────────────────────────────────────────────────
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # ml-engine folder
 
-# Module-level declarations so type checkers (Pyrefly) can resolve these names
-model = None
-model_columns: list = []
+# ── Valid categories (data.py ke saath sync) ─────────────────────────────────
+VALID_CATEGORIES = [
+    "Groceries", "Food", "Rent", "Shopping", "Travel",
+    "Medical", "Entertainment", "Investment", "Bills",
+]
 
-# Load model and columns
-def load_or_train_model():
-    global model, model_columns
-    try:
-        model = pickle.load(open('finance_model.pkl', 'rb'))
-        model_columns = pickle.load(open('model_columns.pkl', 'rb'))
-        print("[OK] Model loaded successfully!")
-    except Exception as e:
-        print(f"[WARN] Model load failed ({e}), retraining...")
-        try:
-            import subprocess
-            subprocess.run(['python', 'train.py'], check=True)
-            model = pickle.load(open('finance_model.pkl', 'rb'))
-            model_columns = pickle.load(open('model_columns.pkl', 'rb'))
-            print("[OK] Model retrained and loaded!")
-        except Exception as e2:
-            print(f"[ERROR] Retrain failed: {e2}")
-            model = None
-            model_columns = []
+# ── FastAPI app ───────────────────────────────────────────────────────────────
+app = FastAPI(
+    title="AI Finance Safe Spending Limit API",
+    description=(
+        "FastAPI backend for predicting user's safe monthly spending limit "
+        "using Machine Learning (Random Forest / Gradient Boosting)."
+    ),
+    version="2.1",
+)
 
-load_or_train_model()
+# ── Model load ────────────────────────────────────────────────────────────────
+try:
+    model = pickle.load(open(os.path.join(BASE_DIR, "finance_model.pkl"), "rb"))
+    model_columns = pickle.load(open(os.path.join(BASE_DIR, "model_columns.pkl"), "rb"))
+    print("[OK] Model and columns loaded successfully!")
+except Exception as e:
+    print(f"[ERROR] Could not load model files: {e}")
+    model = None
+    model_columns = None
 
-def build_input(month, income, prev_expense, category):
-    """Build input DataFrame matching training features"""
-    # Derived features
-    savings_rate = round((income - prev_expense) / income, 4) if income > 0 else 0
-    expense_ratio = round(prev_expense / income, 4) if income > 0 else 0
-    income_bracket = 1
-    if income > 200000: income_bracket = 5
-    elif income > 100000: income_bracket = 4
-    elif income > 50000: income_bracket = 3
-    elif income > 25000: income_bracket = 2
 
-    row = {
-        'month': month,
-        'monthly_income': income,
-        'prev_month_expense': prev_expense,
-        'savings_rate': savings_rate,
-        'expense_ratio': expense_ratio,
-        'income_bracket': income_bracket,
-        'is_festival_month': 1 if month in [10, 11, 12] else 0,
-        'is_tax_saving_month': 1 if month in [1, 2, 3] else 0,
-        'is_travel_season': 1 if month in [5, 6, 12, 1] else 0,
+# ── Request schema ────────────────────────────────────────────────────────────
+class FinanceInput(BaseModel):
+    month: int = Field(..., ge=1, le=12, description="Month of the year (1-12)")
+    category: str = Field(
+        ...,
+        description=f"Expense category. One of: {', '.join(VALID_CATEGORIES)}",
+    )
+    monthly_income: float = Field(..., gt=0, description="User's monthly income")
+    prev_month_expense: float = Field(
+        ..., ge=0, description="Previous month's total expense"
+    )
+
+    @validator("category")
+    def category_must_be_valid(cls, v):
+        if v not in VALID_CATEGORIES:
+            raise ValueError(
+                f"Invalid category '{v}'. Must be one of: {VALID_CATEGORIES}"
+            )
+        return v
+
+    @validator("prev_month_expense")
+    def expense_cannot_exceed_income(cls, v, values):
+        income = values.get("monthly_income")
+        if income and v > income * 2:
+            raise ValueError(
+                "prev_month_expense seems unrealistically high compared to monthly_income."
+            )
+        return v
+
+
+# ── Routes ────────────────────────────────────────────────────────────────────
+@app.get("/")
+def home():
+    return {
+        "message": "Welcome to AI Finance ML Engine (FastAPI)",
+        "version": "2.1",
+        "docs_url": "/docs",
+        "valid_categories": VALID_CATEGORIES,
     }
 
-    # Category one-hot
-    for col in model_columns:
-        if col.startswith('category_'):
-            row[col] = 1 if col == f'category_{category}' else 0
 
-    df = pd.DataFrame([row])
-
-    # Ensure all columns present
-    for col in model_columns:
-        if col not in df.columns:
-            df[col] = 0
-
-    return df[model_columns]
-
-
-@app.route('/health', methods=['GET'])
-def health():
-    return jsonify({
-        "status": "online",
-        "model_loaded": model is not None,
-        "features": len(model_columns)
-    })
-
-
-@app.route('/predict', methods=['POST'])
-def predict():
-    if model is None:
-        return jsonify({"status": "error", "message": "Model not loaded. Run train.py first."}), 503
+@app.post("/predict")
+def predict_safe_limit(data: FinanceInput):
+    if model is None or model_columns is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Model not loaded. Please train the model first (run train.py).",
+        )
 
     try:
-        data = request.get_json()
-        month = int(data.get('month', 1))
-        income = float(data.get('monthly_income', 50000))
-        prev_expense = float(data.get('prev_month_expense', 0))
-        category = data.get('category', 'Food')
+        # 1. savings_rate aur expense_ratio auto-calculate karein
+        savings_rate = round(
+            (data.monthly_income - data.prev_month_expense) / data.monthly_income, 4
+        )
+        expense_ratio = round(data.prev_month_expense / data.monthly_income, 4)
 
-        input_df = build_input(month, income, prev_expense, category)
-        safe_limit = float(model.predict(input_df)[0])
-        safe_limit = max(income * 0.40, min(safe_limit, income * 0.85))  # Clamp between 40-85%
-        safe_limit = round(safe_limit, 2)
+        # 2. DataFrame banao
+        df = pd.DataFrame([{
+            "month": data.month,
+            "category": data.category,
+            "monthly_income": data.monthly_income,
+            "prev_month_expense": data.prev_month_expense,
+            "savings_rate": savings_rate,
+            "expense_ratio": expense_ratio,
+        }])
 
-        remaining = round(safe_limit - prev_expense, 2)
-        used_pct = round((prev_expense / safe_limit * 100), 1) if safe_limit > 0 else 0
+        # 3. Feature engineering — bilkul train.py jaisi
+        df["income_bracket"] = pd.cut(
+            df["monthly_income"],
+            bins=[0, 25000, 50000, 100000, 200000, float("inf")],
+            labels=[1, 2, 3, 4, 5],
+        ).astype(int)
 
-        if used_pct >= 100:
-            status = "Over Budget"
-        elif used_pct >= 80:
-            status = "Warning"
-        elif used_pct >= 60:
-            status = "Moderate"
-        else:
-            status = "Excellent"
+        df["is_festival_month"] = df["month"].isin([10, 11, 12]).astype(int)
+        df["is_tax_saving_month"] = df["month"].isin([1, 2, 3]).astype(int)
 
-        return jsonify({
+        # 4. One-hot encode category
+        df = pd.get_dummies(df, columns=["category"], prefix="category")
+
+        # 5. Missing columns ko 0 se fill karo
+        for col in model_columns:
+            if col not in df.columns:
+                df[col] = 0
+
+        # 6. Exact column order maintain karo
+        df = df[model_columns]
+
+        # 7. Prediction
+        prediction = model.predict(df)
+        safe_limit = float(prediction[0])
+
+        return {
             "status": "success",
-            "safe_spending_limit": safe_limit,
-            "remaining_budget": max(0, remaining),
-            "used_percentage": used_pct,
-            "budget_status": status,
-            "income": income,
-            "current_expense": prev_expense
-        })
+            "monthly_income": data.monthly_income,
+            "prev_month_expense": data.prev_month_expense,
+            "savings_rate": savings_rate,
+            "expense_ratio": expense_ratio,
+            "safe_spending_limit": round(safe_limit, 2),
+            "safe_limit_percentage": round(
+                (safe_limit / data.monthly_income) * 100, 2
+            ),
+        }
 
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 400
-
-
-@app.route('/predict-all', methods=['POST'])
-def predict_all():
-    """Predict expenses for all categories at once"""
-    if model is None:
-        return jsonify({"status": "error", "message": "Model not loaded"}), 503
-
-    try:
-        data = request.get_json()
-        month = int(data.get('month', 1))
-        income = float(data.get('monthly_income', 50000))
-        prev_expense = float(data.get('prev_month_expense', 20000))
-
-        categories = ['Groceries', 'Food', 'Rent', 'Shopping',
-                      'Travel', 'Medical', 'Entertainment', 'Investment', 'Bills']
-
-        results = {}
-        for cat in categories:
-            input_df = build_input(month, income, prev_expense, cat)
-            pred = float(model.predict(input_df)[0])
-            results[cat] = round(max(0, pred), 2)
-
-        total_predicted = sum(results.values())
-        return jsonify({
-            "status": "success",
-            "predictions": results,
-            "total_predicted": round(total_predicted, 2),
-            "monthly_income": income,
-            "estimated_savings": round(income - total_predicted, 2)
-        })
-
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 400
-
-
-if __name__ == '__main__':
-    import os
-    port = int(os.environ.get('PORT', 5001))
-    app.run(host='0.0.0.0', port=port, debug=False)
+        raise HTTPException(status_code=500, detail=str(e))
