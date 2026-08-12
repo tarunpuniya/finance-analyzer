@@ -35,34 +35,42 @@ except Exception as e:
     model_columns = None
 
 
-# ── Request schema ────────────────────────────────────────────────────────────
 class FinanceInput(BaseModel):
-    month: int = Field(..., ge=1, le=12, description="Month of the year (1-12)")
+    month: int = Field(default=1, ge=1, le=12, description="Month of the year (1-12)")
     category: str = Field(
-        ...,
+        default="Food",
         description=f"Expense category. One of: {', '.join(VALID_CATEGORIES)}",
     )
-    monthly_income: float = Field(..., gt=0, description="User's monthly income")
+    monthly_income: float = Field(default=1000.0, ge=0, description="User's monthly income")
     prev_month_expense: float = Field(
-        ..., ge=0, description="Previous month's total expense"
+        default=0.0, ge=0, description="Previous month's total expense"
     )
 
-    @validator("category")
-    def category_must_be_valid(cls, v):
-        if v not in VALID_CATEGORIES:
-            raise ValueError(
-                f"Invalid category '{v}'. Must be one of: {VALID_CATEGORIES}"
-            )
-        return v
+    @validator("category", pre=True, always=True)
+    def sanitize_category(cls, v):
+        if not v or not isinstance(v, str):
+            return "Food"
+        v_clean = v.strip().capitalize()
+        for valid in VALID_CATEGORIES:
+            if valid.lower() == v_clean.lower():
+                return valid
+        return "Food"
 
-    @validator("prev_month_expense")
-    def expense_cannot_exceed_income(cls, v, values):
-        income = values.get("monthly_income")
-        if income and v > income * 2:
-            raise ValueError(
-                "prev_month_expense seems unrealistically high compared to monthly_income."
-            )
-        return v
+    @validator("monthly_income", pre=True, always=True)
+    def sanitize_income(cls, v):
+        try:
+            val = float(v)
+            return val if val > 0 else 1000.0
+        except Exception:
+            return 1000.0
+
+    @validator("prev_month_expense", pre=True, always=True)
+    def sanitize_expense(cls, v):
+        try:
+            val = float(v)
+            return val if val >= 0 else 0.0
+        except Exception:
+            return 0.0
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────

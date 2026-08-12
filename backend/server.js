@@ -476,17 +476,25 @@ app.post('/api/smart-analysis', async (req, res) => {
         let budgetStatus = 'Good';
 
         try {
+            const validCategories = ["Groceries", "Food", "Rent", "Shopping", "Travel", "Medical", "Entertainment", "Investment", "Bills"];
+            let mlCategory = categories?.topCategory || 'Food';
+            const matchCat = validCategories.find(c => c.toLowerCase() === String(mlCategory).toLowerCase());
+            mlCategory = matchCat || 'Food';
+
+            const safeIncome = (income && Number(income) > 0) ? Number(income) : 1000;
+            const safeExpense = (expense && Number(expense) >= 0) ? Number(expense) : 0;
+
             const mlRes = await axios.post(`${ML_ENGINE_URL}/predict`, {
                 month,
-                monthly_income: income,
-                prev_month_expense: expense,
-                category: categories?.topCategory || 'Food'
+                monthly_income: safeIncome,
+                prev_month_expense: safeExpense,
+                category: mlCategory
             });
             if (mlRes.data.status === 'success') {
                 budgetLimit = mlRes.data.safe_spending_limit || mlRes.data.predicted_expense || income * 0.65;
-                budgetStatus = mlRes.data.budget_status;
+                budgetStatus = mlRes.data.budget_status || 'Good';
             }
-        } catch(mlErr) { console.log('ML offline, using fallback'); }
+        } catch(mlErr) { console.log('ML offline or error, using fallback:', mlErr.message); }
 
         const isOverspending = expense > budgetLimit;
         const savingsAmount = income - expense;
@@ -717,7 +725,7 @@ app.post('/api/goals', async (req, res) => {
 
 app.put('/api/goals/:id', async (req, res) => {
     try {
-        const goal = await Goal.findByIdAndUpdate(req.params.id, req.body, { new: true });
+        const goal = await Goal.findByIdAndUpdate(req.params.id, req.body, { returnDocument: 'after' });
         res.json(goal);
     } catch (err) { res.status(400).json({ error: err.message }); }
 });
@@ -755,7 +763,7 @@ app.post('/api/budget', async (req, res) => {
         const budget = await Budget.findOneAndUpdate(
             { userId: user._id, category, month: now.getMonth() + 1, year: now.getFullYear() },
             { limitAmount },
-            { upsert: true, new: true }
+            { upsert: true, returnDocument: 'after' }
         );
         res.json(budget);
     } catch (err) { res.status(400).json({ error: err.message }); }
@@ -806,7 +814,7 @@ app.post('/api/wallet', async (req, res) => {
 
 app.put('/api/wallet/:id', async (req, res) => {
     try {
-        const wallet = await Wallet.findByIdAndUpdate(req.params.id, req.body, { new: true });
+        const wallet = await Wallet.findByIdAndUpdate(req.params.id, req.body, { returnDocument: 'after' });
         res.json(wallet);
     } catch (err) { res.status(400).json({ error: err.message }); }
 });
