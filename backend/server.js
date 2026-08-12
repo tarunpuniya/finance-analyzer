@@ -8,6 +8,7 @@ const nodemailer = require('nodemailer');
 const session = require('express-session');
 const passport = require('passport');
 const Razorpay = require('razorpay');
+const path = require('path');
 require('dotenv').config();
 
 // 1. Model Import (Sirf ek baar)
@@ -32,6 +33,7 @@ const GROQ_MODEL = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
 // Middlewares
 app.use(cors());
 app.use(express.json());
+app.use(express.static(path.join(__dirname, '../frontend')));
 
 // Session Setup
 app.use(session({
@@ -50,20 +52,54 @@ mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/financeDB')
     .then(() => console.log("✅ MongoDB Connected Successfully!"))
     .catch(err => console.log("❌ DB Error:", err));
 
-// EMAIL SENDING via Brevo HTTP API
+// EMAIL SENDING via Brevo HTTP API or Nodemailer SMTP
 async function sendEmail(to, subject, html) {
-    const response = await axios.post('https://api.brevo.com/v3/smtp/email', {
-        sender: { name: 'Finance AI', email: process.env.EMAIL_USER },
-        to: [{ email: to }],
-        subject,
-        htmlContent: html
-    }, {
-        headers: {
-            'api-key': process.env.BREVO_API_KEY,
-            'Content-Type': 'application/json'
+    // 1. Use Nodemailer SMTP if EMAIL_PASS or SMTP parameters are set in .env
+    if (process.env.EMAIL_PASS || process.env.SMTP_HOST) {
+        const transporter = nodemailer.createTransport({
+            host: process.env.SMTP_HOST || 'smtp.gmail.com',
+            port: parseInt(process.env.SMTP_PORT || '587'),
+            secure: process.env.SMTP_SECURE === 'true',
+            auth: {
+                user: process.env.SMTP_USER || process.env.EMAIL_USER,
+                pass: process.env.SMTP_PASS || process.env.EMAIL_PASS
+            }
+        });
+        return await transporter.sendMail({
+            from: `"Finance AI" <${process.env.EMAIL_USER || 'noreply@financeai.com'}>`,
+            to,
+            subject,
+            html
+        });
+    }
+
+    // 2. Fallback to Brevo HTTP API
+    if (!process.env.BREVO_API_KEY) {
+        throw new Error('No BREVO_API_KEY or SMTP credentials (EMAIL_PASS) configured in .env');
+    }
+
+    try {
+        const response = await axios.post('https://api.brevo.com/v3/smtp/email', {
+            sender: { name: 'Finance AI', email: process.env.EMAIL_USER || 'noreply@financeai.com' },
+            to: [{ email: to }],
+            subject,
+            htmlContent: html
+        }, {
+            headers: {
+                'api-key': (process.env.BREVO_API_KEY || '').trim(),
+                'Content-Type': 'application/json'
+            }
+        });
+        return response.data;
+    } catch (err) {
+        if (err.response && err.response.status === 401) {
+            throw new Error('Brevo API Key is invalid or unauthorized (Status Code 401). Please check BREVO_API_KEY or set EMAIL_PASS in backend/.env');
         }
-    });
-    return response.data;
+        if (err.response && err.response.data && err.response.data.message) {
+            throw new Error(`Brevo Email API Error: ${err.response.data.message}`);
+        }
+        throw err;
+    }
 }
 
 function ensureGroqConfigured() {
@@ -91,10 +127,7 @@ async function createGroqCompletion(messages, options = {}) {
     return response.data.choices?.[0]?.message?.content || '';
 }
 
-// --- ROUTES ---
 
-// Gemini AI Advice
-// Groq AI Advice
 app.post('/api/ai-advice', async (req, res) => {
     try {
         const { income, expense, savings, topCategory } = req.body;
@@ -273,27 +306,57 @@ app.get('/api/stats', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// Auth Logic (OTP & Google)
 app.post('/api/check-email', async (req, res) => {
     try {
         const { email } = req.body;
+        if (!email) {
+            return res.status(400).json({ error: "Email address is required." });
+        }
+
         const user = await User.findOne({ email });
         if (user) {
             return res.json({ exists: true, isGoogleUser: !!user.googleId, message: "User exists." });
         } else {
             const otp = Math.floor(100000 + Math.random() * 900000).toString();
             otpStore[email] = otp;
-            console.log(`📧 Sending OTP to ${email}...`);
-            const info = await sendEmail(
-                email,
-                'Your OTP - Finance AI',
-                `<h2>Finance AI - OTP Verification</h2><p>Your OTP is: <b style="font-size:24px">${otp}</b></p><p>This OTP is valid for 10 minutes.</p>`
-            );
-            console.log(`✅ OTP email sent`);
-            res.json({ exists: false, message: "OTP Sent." });
+            console.log(`🔑 [DEV / OTP LOG] Generated OTP for ${email}: ${otp}`);
+
+            let emailSent = false;
+            let emailErrorMsg = null;
+
+            try {
+                console.log(`📧 Sending OTP to ${email}...`);
+                await sendEmail(
+                    email,
+                    'Your OTP - Finance AI',
+                    `<h2>Finance AI - OTP Verification</h2><p>Your OTP is: <b style="font-size:24px">${otp}</b></p><p>This OTP is valid for 10 minutes.</p>`
+                );
+                console.log(`✅ OTP email sent successfully to ${email}`);
+                emailSent = true;
+            } catch (emailErr) {
+                console.error("❌ OTP Send Error:", emailErr.message);
+                emailErrorMsg = emailErr.message;
+            }
+
+            if (!emailSent) {
+                const isDev = process.env.NODE_ENV !== 'production';
+                if (isDev) {
+                    console.log(`⚠️ Email delivery failed (${emailErrorMsg}). Dev mode active: Use console OTP ${otp} to complete sign up.`);
+                    return res.json({ 
+                        exists: false, 
+                        devMode: true,
+                        otpSent: false,
+                        message: `OTP: ${otp} (Logged to server console). Email delivery failed: ${emailErrorMsg}`
+                    });
+                } else {
+                    return res.status(500).json({ error: `Failed to send OTP email: ${emailErrorMsg}` });
+                }
+            }
+
+            res.json({ exists: false, otpSent: true, message: "OTP Sent." });
         }
     } catch (err) { 
-        console.error("❌ OTP Send Error:", err.message);
+        console.error("❌ check-email Error:", err.message);
         res.status(500).json({ error: err.message }); 
     }
 });
@@ -323,7 +386,7 @@ app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'em
 app.get('/auth/google/callback', 
     passport.authenticate('google', { failureRedirect: '/login' }),
     (req, res) => {
-        const frontendURL = process.env.FRONTEND_URL || 'http://localhost:5500';
+        const frontendURL = process.env.FRONTEND_URL || 'http://localhost:5000';
         res.redirect(`${frontendURL}/dashboard.html?email=${req.user.email}`);
     }
 );
