@@ -25,7 +25,7 @@ const razorpay = new Razorpay({
 
 const app = express();
 const otpStore = {};
-const ML_ENGINE_URL = process.env.ML_ENGINE_URL || 'http://localhost:5001';
+const ML_ENGINE_URL = process.env.ML_ENGINE_URL || 'http://localhost:8000';
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const GROQ_MODEL = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
 
@@ -126,7 +126,7 @@ app.post('/api/get-prediction', async (req, res) => {
         });
         res.json(response.data);
     } catch (error) {
-        res.status(500).json({ status: "error", message: "Brain (Flask) is offline" });
+        res.status(500).json({ status: "error", message: "ML Engine (FastAPI) is offline" });
     }
 });
 
@@ -310,6 +310,8 @@ app.post('/api/auth/final', async (req, res) => {
             res.json({ success: true, email: newUser.email });
         } else {
             const user = await User.findOne({ email });
+            if (!user) return res.status(401).json({ message: "No account found with this email." });
+            if (user.googleId) return res.status(400).json({ message: "This account uses Google Sign-In. Please sign in with Google." });
             const isMatch = await bcrypt.compare(password, user.password);
             if (isMatch) res.json({ success: true, email: user.email });
             else res.status(401).json({ message: "Wrong Password" });
@@ -704,19 +706,12 @@ app.delete('/api/budget/:id', async (req, res) => {
 });
 
 // ─── WALLET ───────────────────────────────────────────────────────────────────
-// Helper: get or create a userId from email (allows app to work without strict auth)
+// Helper: get userId from email — only for registered users, no auto-creation
 async function resolveUserId(email) {
     if (!email) return null;
     const cleanEmail = email.toLowerCase().trim();
     const user = await User.findOne({ email: cleanEmail });
-    if (user) return user._id;
-    // Auto-create minimal placeholder user so wallet works without registration
-    const placeholder = new User({
-        email: cleanEmail,
-        password: 'placeholder_' + Math.random().toString(36).slice(2)
-    });
-    await placeholder.save();
-    return placeholder._id;
+    return user ? user._id : null;
 }
 
 app.get('/api/wallet', async (req, res) => {
