@@ -60,9 +60,13 @@ class FinanceInput(BaseModel):
     def sanitize_income(cls, v):
         try:
             val = float(v)
-            return val if val > 0 else 1000.0
+            if val <= 0:
+                raise ValueError("monthly_income must be greater than 0")
+            return val
+        except ValueError:
+            raise
         except Exception:
-            return 1000.0
+            raise ValueError("Invalid monthly_income value")
 
     @validator("prev_month_expense", pre=True, always=True)
     def sanitize_expense(cls, v):

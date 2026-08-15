@@ -469,6 +469,15 @@ RULES:
 app.post('/api/smart-analysis', async (req, res) => {
     try {
         const { income, expense, savings, categories } = req.body;
+
+        // ── Guard: no data yet, don't run ML ──────────────────────────────────
+        if (!income || Number(income) <= 0) {
+            return res.json({
+                success: false,
+                message: 'No income data yet. Add income transactions to enable smart analysis.'
+            });
+        }
+
         const month = new Date().getMonth() + 1;
 
         // Step 1: ML Model se safe spending limit lo
@@ -481,7 +490,7 @@ app.post('/api/smart-analysis', async (req, res) => {
             const matchCat = validCategories.find(c => c.toLowerCase() === String(mlCategory).toLowerCase());
             mlCategory = matchCat || 'Food';
 
-            const safeIncome = (income && Number(income) > 0) ? Number(income) : 1000;
+            const safeIncome = Number(income);
             const safeExpense = (expense && Number(expense) >= 0) ? Number(expense) : 0;
 
             const mlRes = await axios.post(`${ML_ENGINE_URL}/predict`, {

@@ -1032,6 +1032,15 @@
          .forEach(t => { catMap[t.category] = (catMap[t.category] || 0) + Number(t.amount); });
       const topCat = Object.keys(catMap).sort((a, b) => catMap[b] - catMap[a])[0] || 'General';
 
+      // ── No data yet — don't call ML, just show empty state ──
+      if (!s.income && !s.expense) {
+        badge.style.display = 'none';
+        metaRow.style.display = 'none';
+        el.textContent = 'Add income & transactions to unlock AI-powered smart analysis.';
+        if (btn) { btn.innerHTML = '<i class="fas fa-sync-alt"></i> Refresh'; btn.disabled = false; }
+        return;
+      }
+
       // ── Call smart-analysis (ML + Groq combined) ──
       const data = await APP.apiPost('/smart-analysis', {
         income: s.income || 0,

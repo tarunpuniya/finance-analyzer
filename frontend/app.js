@@ -3,7 +3,7 @@
    ═══════════════════════════════════════════════════════════ */
 
 const APP = (() => {
-  // ── API base URL ────────────────────────────────────────────
+  // ── API base URL ──────────────────────────────────────────
   const API = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
     ? 'http://localhost:5000/api'
     : 'https://ai-finance-analyzer-5em3.onrender.com/api';
@@ -19,8 +19,8 @@ const APP = (() => {
     if (!email) return 'User';
     const local = email.split('@')[0];
     const letters = local.replace(/[^a-zA-Z]/g, '');
-    const surnames = ['puniya','sharma','verma','gupta','singh','kumar','patel',
-                      'jain','agarwal','mishra','yadav','tiwari','pandey','chauhan','mehta'];
+    const surnames = ['puniya', 'sharma', 'verma', 'gupta', 'singh', 'kumar', 'patel',
+      'jain', 'agarwal', 'mishra', 'yadav', 'tiwari', 'pandey', 'chauhan', 'mehta'];
     let name = letters.toLowerCase();
     for (const s of surnames) {
       if (name.includes(s)) { name = name.split(s)[0]; break; }
@@ -48,7 +48,7 @@ const APP = (() => {
   function changeBadge(current, prev) {
     if (!prev || prev === 0) return '<span class="stat-card-change"><small><i class="fas fa-calendar-alt"></i> Current month spending</small></span>';
     const pct = ((current - prev) / prev * 100).toFixed(1);
-    const up  = pct >= 0;
+    const up = pct >= 0;
     const cls = up ? 'up' : 'down';
     const arrow = up ? '↑' : '↓';
     return `<span class="stat-card-change ${cls}">${arrow} ${Math.abs(pct)}% <small>vs last month</small></span>`;
@@ -79,10 +79,10 @@ const APP = (() => {
 
     const el = id => document.getElementById(id);
     if (el('topbarGreeting')) el('topbarGreeting').textContent = `${greet}, ${name}!`;
-    if (el('topbarSub'))     el('topbarSub').textContent     = fmtDate(new Date(), { weekday:'long', day:'numeric', month:'long', year:'numeric' });
-    if (el('userNameChip'))  el('userNameChip').textContent  = name;
+    if (el('topbarSub')) el('topbarSub').textContent = fmtDate(new Date(), { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    if (el('userNameChip')) el('userNameChip').textContent = name;
     if (el('userEmailChip')) el('userEmailChip').textContent = email;
-    if (el('userAvatar'))    el('userAvatar').textContent    = name.charAt(0).toUpperCase();
+    if (el('userAvatar')) el('userAvatar').textContent = name.charAt(0).toUpperCase();
 
     return email;
   }
@@ -114,18 +114,18 @@ const APP = (() => {
   function countUp(el, target, prefix = null) {
     if (typeof el === 'string') el = document.getElementById(el);
     if (!el) return;
-    
+
     // Use settings-aware prefix if not specified
     if (prefix === null) {
       prefix = getCurrencySymbol();
     }
-    
+
     const start = 0;
     const duration = 900;
     const step = (timestamp, startTime) => {
       const progress = Math.min((timestamp - startTime) / duration, 1);
       const eased = 1 - Math.pow(1 - progress, 3);
-      const value  = Math.round(start + eased * target);
+      const value = Math.round(start + eased * target);
       el.textContent = prefix + value.toLocaleString('en-IN');
       if (progress < 1) requestAnimationFrame(ts => step(ts, startTime));
     };
@@ -165,7 +165,7 @@ const APP = (() => {
   }
 
   // ── Month name helper ───────────────────────────────────────
-  const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   function monthName(num) { return MONTH_NAMES[(num - 1) % 12]; }
 
   // ── Settings Management ─────────────────────────────────────
@@ -234,7 +234,7 @@ const APP = (() => {
     if (!dateStr) return '—';
     const settings = getSettings();
     const date = new Date(dateStr);
-    
+
     if (opts) {
       return date.toLocaleDateString('en-IN', opts);
     }
@@ -255,7 +255,7 @@ const APP = (() => {
     API, getEmail, getDisplayName, fmtCurrency, fmtDate,
     changeBadge, logout, requireAuth, initTopbar, setActiveNav,
     toast, countUp, apiGet, apiPost, apiPut, apiDelete, monthName,
-    getSettings, updateSetting, getCurrencySymbol, 
+    getSettings, updateSetting, getCurrencySymbol,
     formatCurrencyWithSettings, formatDateWithSettings
   };
 })();
@@ -265,8 +265,8 @@ function logout() { APP.logout(); }
 
 // ── Mobile Sidebar Toggle ──────────────────────────────────────
 function toggleMobileSidebar() {
-  const sidebar  = document.querySelector('.sidebar');
-  const overlay  = document.querySelector('.sidebar-overlay');
+  const sidebar = document.querySelector('.sidebar');
+  const overlay = document.querySelector('.sidebar-overlay');
   if (!sidebar) return;
   const isOpen = sidebar.classList.toggle('open');
   if (overlay) overlay.classList.toggle('visible', isOpen);
