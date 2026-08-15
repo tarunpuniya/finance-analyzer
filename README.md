@@ -46,7 +46,7 @@ By combining traditional financial logging with **Scikit-Learn Gradient Boosting
 - **Visual Cash Flow**: Interactive financial overview with real-time stats updates and transaction history summaries.
 
 ### 🤖 ML Safe Spending Limit Predictor
-- **Predictive AI**: Machine learning regression model trained on 50,000+ financial records.
+- **Predictive AI**: Machine learning regression model trained on 200,000+ financial records.
 - **Smart Thresholds**: Evaluates monthly income, historical expense ratios, category spending, festival/tax season indicators to calculate exact safe spending caps ($R^2 = 0.98$).
 
 ### 💬 Generative AI Financial Assistant & Insights
@@ -349,7 +349,5 @@ Contributions are welcome! Please follow these steps:
 
 
 
-<p align="center">
-  Crafted with ❤️ by the AI Finance Analyzer Team
-</p>
+
 
