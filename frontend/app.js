@@ -6,7 +6,7 @@ const APP = (() => {
   // ── API base URL ──────────────────────────────────────────
   const API = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
     ? 'http://localhost:5000/api'
-    : 'https://ai-finance-analyzer-5em3.onrender.com/api';
+    : 'https://finance-analyzer-35wd.onrender.com/api';
 
   // ── Get current user email ──────────────────────────────────
   function getEmail() {
