@@ -1192,6 +1192,36 @@ app.listen(PORT, () => {
     console.log(`🚀 Server running on: http://localhost:${PORT}`);
 });
 
+// ── Keep-Alive: Render free tier sleep se bachane ke liye ────────────────────
+// Production mein hi chalega (local pe nahi)
+if (process.env.NODE_ENV === 'production' || process.env.RENDER) {
+    const SELF_URL    = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
+    const ML_URL      = process.env.ML_ENGINE_URL       || 'http://localhost:8000';
+    const PING_INTERVAL = 14 * 60 * 1000; // 14 minutes
+
+    setInterval(async () => {
+        try {
+            await axios.get(`${SELF_URL}/api/health`);
+            console.log('✅ Self-ping OK');
+        } catch (e) {
+            console.log('⚠️ Self-ping failed:', e.message);
+        }
+        try {
+            await axios.get(`${ML_URL}/`);
+            console.log('✅ ML-ping OK');
+        } catch (e) {
+            console.log('⚠️ ML-ping failed:', e.message);
+        }
+    }, PING_INTERVAL);
+
+    console.log(`🔄 Keep-alive pings started (every 14 min)`);
+}
+
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
 
 
 
