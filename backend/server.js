@@ -36,10 +36,15 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, '../frontend')));
 
 // Session Setup
+const MongoStore = require('connect-mongo');
 app.use(session({
     secret: process.env.SESSION_SECRET || 'secret',
     resave: false,
-    saveUninitialized: false
+    saveUninitialized: false,
+    store: MongoStore.create({
+        mongoUrl: process.env.MONGO_URI || 'mongodb://localhost:27017/financeDB',
+        ttl: 14 * 24 * 60 * 60
+    })
 }));
 
 // Passport Config
