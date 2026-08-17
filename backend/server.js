@@ -1189,7 +1189,7 @@ app.post('/api/parse-sms', (req, res) => {
 // Final Server Listen (SIRF EK BAAR)
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-    console.log(`🚀 Server running on: http://localhost:${PORT}`);
+    console.log(`🚀 Server running on port: ${PORT}`);
 });
 
 // ── Keep-Alive: Render free tier sleep se bachane ke liye ────────────────────
